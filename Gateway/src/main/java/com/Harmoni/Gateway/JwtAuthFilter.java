@@ -46,7 +46,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
 
         if (isPublic(path)) {
-            chain.doFilter(request, response);
+            chain.doFilter(new HeaderAddingWrapper(request, null), response);
             return;
         }
 
@@ -102,32 +102,45 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         response.addCookie(c);
     }
 
-    /** Injects X-User-Name header into the proxied request */
+    /**
+     * Injects X-Forwarded-* headers so Master knows the real client-facing host/port
+     * (the Gateway at 8080), and optionally injects X-User-Name for authenticated requests.
+     */
     private static class HeaderAddingWrapper extends HttpServletRequestWrapper {
-        private final String username;
+        private final Map<String, String> extras = new LinkedHashMap<>();
 
         HeaderAddingWrapper(HttpServletRequest request, String username) {
             super(request);
-            this.username = username;
+            // Tell backend the original scheme/host/port the client used
+            extras.put("X-Forwarded-Proto", request.getScheme());
+            extras.put("X-Forwarded-Host",  request.getServerName());
+            extras.put("X-Forwarded-Port",  String.valueOf(request.getServerPort()));
+            extras.put("X-Forwarded-For",   request.getRemoteAddr());
+            // Only added for authenticated requests
+            if (username != null) extras.put("X-User-Name", username);
         }
 
         @Override
         public String getHeader(String name) {
-            if ("X-User-Name".equalsIgnoreCase(name)) return username;
+            for (Map.Entry<String, String> e : extras.entrySet())
+                if (e.getKey().equalsIgnoreCase(name)) return e.getValue();
             return super.getHeader(name);
         }
 
         @Override
         public Enumeration<String> getHeaders(String name) {
-            if ("X-User-Name".equalsIgnoreCase(name))
-                return Collections.enumeration(List.of(username));
+            for (Map.Entry<String, String> e : extras.entrySet())
+                if (e.getKey().equalsIgnoreCase(name))
+                    return Collections.enumeration(List.of(e.getValue()));
             return super.getHeaders(name);
         }
 
         @Override
         public Enumeration<String> getHeaderNames() {
-            List<String> names = Collections.list(super.getHeaderNames());
-            if (!names.contains("X-User-Name")) names.add("X-User-Name");
+            List<String> names = new ArrayList<>(Collections.list(super.getHeaderNames()));
+            extras.keySet().forEach(k -> {
+                if (names.stream().noneMatch(k::equalsIgnoreCase)) names.add(k);
+            });
             return Collections.enumeration(names);
         }
     }
