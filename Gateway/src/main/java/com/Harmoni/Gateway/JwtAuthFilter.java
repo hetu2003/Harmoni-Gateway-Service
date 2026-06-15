@@ -26,17 +26,31 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_EXACT = Set.of(
             "/harmoni", "/harmoni/", "/harmoni/home",
             "/harmoni/login", "/harmoni/register",
+            "/harmoni/logout",
             "/harmoni/forgot-password", "/harmoni/reset-password",
-            "/harmoni/event", "/harmoni/event/search"
+            "/harmoni/event", "/harmoni/event/search",
+            "/harmoni/company",
+            "/harmoni/profile", "/harmoni/profile/update",
+            "/harmoni/about", "/harmoni/contact", "/harmoni/contact-submit",
+            "/harmoni/faq", "/harmoni/privacy-policy", "/harmoni/closed-event",
+            "/harmoni/get-city", "/harmoni/vendor/get-subcat",
+            "/harmoni/home-search",
+            "/harmoni/register-success",
+            "/harmoni/feedback",
+            "/harmoni/error"
     );
 
     private static final List<String> PUBLIC_PREFIX = List.of(
             "/harmoni/login/",
             "/harmoni/event-details/",
+            "/harmoni/event-register/",
             "/harmoni/company/",
             "/harmoni/assets/",
+            "/harmoni/uploads/",
             "/harmoni/location/",
-            "/auth/"
+            "/harmoni/payment/",
+            "/auth/",
+            "/harmoni/admin/"
     );
 
     @Override
@@ -68,7 +82,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             chain.doFilter(new HeaderAddingWrapper(request, username), response);
 
         } catch (Exception e) {
-            clearCookie(response, "jwt_token");
             redirectOrUnauthorized(request, response);
         }
     }
@@ -91,7 +104,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (accept != null && accept.contains("application/json")) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         } else {
-            response.sendRedirect(request.getContextPath() + "/harmoni/login");
+            // Add ?expired=true so the login page knows this was a gateway-forced redirect
+            // and can distinguish it from a user manually navigating to the login page
+            response.sendRedirect(request.getContextPath() + "/harmoni/login?expired=true");
         }
     }
 
