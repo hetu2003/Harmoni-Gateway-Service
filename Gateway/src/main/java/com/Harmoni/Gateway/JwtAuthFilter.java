@@ -13,12 +13,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     @Value("${jwt.secret}")
     private String secretKey;
@@ -60,6 +65,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
 
         if (isPublic(path)) {
+            log.debug("[GATEWAY] PUBLIC  path={}", path);
             chain.doFilter(new HeaderAddingWrapper(request, null), response);
             return;
         }
@@ -67,6 +73,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String jwt = extractCookie(request, "jwt_token");
 
         if (jwt == null) {
+            log.warn("[GATEWAY] REDIRECT_LOGIN path={} reason=no_jwt_cookie", path);
             redirectOrUnauthorized(request, response);
             return;
         }
@@ -79,9 +86,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .getPayload();
 
             String username = claims.getSubject();
+            log.debug("[GATEWAY] PASS    path={} username={}", path, username);
             chain.doFilter(new HeaderAddingWrapper(request, username), response);
 
         } catch (Exception e) {
+            log.warn("[GATEWAY] REDIRECT_LOGIN path={} reason=jwt_invalid error={}", path, e.getMessage());
             redirectOrUnauthorized(request, response);
         }
     }
